@@ -1,0 +1,24 @@
+# 复制为 config.yaml 后填写
+music_dir: /path/to/your/music        # 音乐目录（FLAC/MP3/WAV）
+output_dir: ./output                  # 逐首结果输出目录
+work_dir: /tmp/mta-work               # 临时工作目录
+
+# 多模态模型（用于"听"音频并生成客观描述）
+model:
+  provider: dashscope                 # dashscope = 阿里云百炼
+  name: qwen3.8-omni-flash
+  api_key_env: DASHSCOPE_API_KEY
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  disable_thinking: true              # 关闭思考链，省 ~35% token
+  max_tokens: 1600
+
+# 批量处理
+batch:
+  workers: 5                          # 并发数（I/O 密集，5 左右合适）
+  bitrate: 128k                       # 转码码率（base64 需 < 10MB）
+  skip_existing: true                 # 断点续跑
+
+# 本地声学分析
+local:
+  sample_rate: 22050
+  max_seconds: 90                     # 每首只取前 N 秒（足够做统计）
