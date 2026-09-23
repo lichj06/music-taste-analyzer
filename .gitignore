@@ -6,3 +6,10 @@ config.yaml
 work/
 *.tmp
 .DS_Store
+
+# 分析产物：逐首画像含曲名与听歌习惯，属隐私数据，不能进公开仓库
+output/
+*.log
+*.jsonl
+*.sse
+acoustic.json      # README 里那条本地 CLI 示例的落盘文件
