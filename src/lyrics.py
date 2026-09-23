@@ -5,6 +5,8 @@
 import os
 import re
 
+from . import scan as scan_files
+
 KANA = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
 HAN = re.compile(r"[\u4e00-\u9fff]")
 HANGUL = re.compile(r"[\uac00-\ud7af]")
@@ -28,18 +30,15 @@ def classify(text):
     return "其他/纯音乐"
 
 
-def scan(music_dir):
-    """返回 {音频文件名(无扩展): 语言}。没有配对 .lrc 的记为器乐。"""
-    audio_ext = (".flac", ".mp3", ".wav", ".m4a", ".ogg")
-    lrc = {}
-    for name in os.listdir(music_dir):
-        if name.lower().endswith(".lrc"):
-            lrc[os.path.splitext(name)[0]] = os.path.join(music_dir, name)
+def scan(music_dir, recursive=True):
+    """返回 {相对路径(无扩展): 语言}。没有配对 .lrc 的记为器乐。
+
+    扁平目录下 key 就是文件名，与旧版一致；子目录里的曲目 key 形如 `sub/a`。
+    """
+    lrc = scan_files.paired_lyrics(music_dir, recursive)
     out = {}
-    for name in os.listdir(music_dir):
-        if not name.lower().endswith(audio_ext):
-            continue
-        base = os.path.splitext(name)[0]
+    for rel, _full in scan_files.audio_files(music_dir, recursive):
+        base = os.path.splitext(rel)[0]
         path = lrc.get(base)
         if not path:
             out[base] = "无歌词(器乐/无人声)"

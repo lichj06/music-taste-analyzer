@@ -11,9 +11,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from . import acoustic, config as cfgmod, describe, lyrics
+from . import acoustic, config as cfgmod, describe, lyrics, scan
 
-AUDIO_EXT = (".flac", ".mp3", ".wav", ".m4a", ".ogg")
+AUDIO_EXT = scan.AUDIO_EXT          # 兼容旧引用；实现已统一到 src/scan.py
 
 
 def _safe(name):
@@ -28,7 +28,8 @@ def run_one(path, base, cfg, key, lock, stats, log):
             stats["skip"] += 1
         return
 
-    record = {"file": path, "title": base}
+    # 只记相对路径：绝对路径会把本机目录结构（用户名、备份盘名）带进产物
+    record = {"file": os.path.relpath(path, cfg["music_dir"]), "title": base}
     ok, text, usage = describe.describe(path, cfg, key)
     if not ok:
         with lock:
@@ -72,6 +73,8 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--limit", type=int, default=None, help="只处理前 N 首（调试用）")
+    ap.add_argument("--no-recursive", action="store_true",
+                    help="只处理 music_dir 第一层（默认会递归子目录）")
     args = ap.parse_args()
 
     cfg = cfgmod.load(args.config)
@@ -80,13 +83,14 @@ def main():
     os.makedirs(cfg["output_dir"], exist_ok=True)
     os.makedirs(cfg["work_dir"], exist_ok=True)
 
-    files = sorted(f for f in os.listdir(cfg["music_dir"]) if f.lower().endswith(AUDIO_EXT))
+    recursive = not args.no_recursive
+    files = scan.audio_files(cfg["music_dir"], recursive)
     if args.limit:
         files = files[: args.limit]
     total = len(files)
 
     # 歌词语言判定（本地，一次性）
-    langs = lyrics.scan(cfg["music_dir"])
+    langs = lyrics.scan(cfg["music_dir"], recursive)
     with open(os.path.join(cfg["output_dir"], "_languages.json"), "w", encoding="utf-8") as fh:
         json.dump(langs, fh, ensure_ascii=False, indent=1)
 
@@ -104,12 +108,13 @@ def main():
     base_cfg = cfg
     futs = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for i, name in enumerate(files):
-            base = os.path.splitext(name)[0]
+        for i, (rel, full) in enumerate(files):
+            # rel 是相对 music_dir 的路径（子目录曲目形如 sub/a.flac），
+            # 输出文件名由 _safe 把分隔符换成下划线
+            base = os.path.splitext(rel)[0]
             sub = dict(base_cfg)
             sub["work_dir"] = os.path.join(base_cfg["work_dir"], f"w{i}")
-            futs.append(pool.submit(run_one, os.path.join(base_cfg["music_dir"], name),
-                                    base, sub, key, lock, stats, log))
+            futs.append(pool.submit(run_one, full, base, sub, key, lock, stats, log))
         for fut in as_completed(futs):
             try:
                 fut.result()          # 必须取回结果，否则异常会被静默吞掉
