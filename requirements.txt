@@ -1,2 +1,8 @@
-numpy>=1.24
-pyyaml>=6.0
+# 版本已钉死（实测组合：Python 3.12.3 / numpy 1.26.4 / PyYAML 6.0.1）
+# 未钉版本的 >= 写法会让别人装出不同版本、跑出不同的数值。
+numpy==1.26.4
+PyYAML==6.0.1
+
+# 国内网络慢时加镜像源：
+#   pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 系统依赖（不在 pip 里）：ffmpeg（实测 6.1.1）、curl

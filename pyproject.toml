@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "music-taste-analyzer"
+version = "0.2.0"
+description = "把音乐库变成客观审美画像：本地声学测量 + 多模态模型听感描述"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "lichj06" }]
+# 与 requirements.txt 保持一致：钉死版本，否则别人跑出的数值和你不一样
+dependencies = [
+    "numpy==1.26.4",
+    "PyYAML==6.0.1",
+]
+
+[project.scripts]
+mta-acoustic = "src.acoustic_cli:main"
+
+[tool.setuptools]
+packages = ["src"]

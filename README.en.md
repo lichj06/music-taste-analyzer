@@ -2,7 +2,7 @@
 
 > Turn your music library into an **objective** aesthetic profile — local acoustic measurement crossed with a multimodal model that actually *listens*.
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.12%20tested%20%7C%20%E2%89%A53.10-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Dependencies](https://img.shields.io/badge/deps-numpy%20%7C%20pyyaml%20%7C%20ffmpeg%20%7C%20curl-lightgrey)]()
 
@@ -62,7 +62,7 @@ If the model claims a track is "heavily compressed", check the crest factor in t
                     └──────────────────┘
 ```
 
-**Path A** uses only `numpy`: chroma-based key detection against Krumhansl-Kessler profiles, RMS/peak/crest factor, spectral centroid and rolloff, three-band energy ratios, spectral flatness, and spectral-flux onset density.
+**Path A** uses only `numpy`: chroma-based key detection against Krumhansl-Kessler profiles (Krumhansl & Kessler, 1982, *Psychological Review* 89(4), 334–368), RMS/peak/crest factor, spectral centroid and rolloff, three-band energy ratios, spectral flatness, and spectral-flux onset density.
 
 **Path B** transcodes to mp3, base64-encodes, and sends it inline over any OpenAI-compatible endpoint.
 
@@ -72,15 +72,25 @@ See **[docs/METHOD.md](docs/METHOD.md)** for the full methodology, including exa
 
 ## Quick start
 
+**Path A first — no API key, no config, no network:**
+
+```bash
+python3 -m src.acoustic_cli /path/to/your/music --limit 3 --json acoustic.json
+```
+
+Single file: `python3 -m src.acoustic_cli "track.flac"`. Recurses into subdirectories by
+default; add `--no-recursive` to scan only the top level.
+
 ```bash
 # System deps
 ffmpeg --version
 curl --version
 
-# Python deps
+# Python deps (versions pinned; use a mirror if PyPI is slow where you are)
 pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# Configure
+# Configure (only needed for Path B)
 cp config.example.yaml config.yaml   # then edit music_dir
 export DASHSCOPE_API_KEY=sk-xxxxxxxx
 
@@ -96,6 +106,24 @@ python3 -m src.batch --config config.yaml --limit 5     # try 5 tracks first
 python3 -m src.batch --config config.yaml --workers 8   # override concurrency
 ```
 
+**Scanning.** `batch` and `lyrics.scan` recurse into subdirectories by default
+(`--no-recursive` to disable). A `.lrc` must be **in the same directory with the same
+stem** as its audio file: `sub/a.flac` only pairs with `sub/a.lrc`.
+
+---
+
+## Privacy & copyright
+
+| Item | Behaviour |
+|---|---|
+| What is uploaded | Path B sends the **first 60 seconds** as base64 to a third-party API (DashScope by default). Never the whole track |
+| Don't want to upload? | Use `python3 -m src.acoustic_cli` only — local, offline, no key |
+| API key | Passed to curl via a `0600` config file (`-K`), deleted afterwards. Never in argv, so it never shows up in `ps` |
+| Temp files | `work_dir` is chmod 0700; `payload.json` / `resp.sse` are 0600 |
+| Analysis output | `output/`, `*.log`, `*.jsonl` are gitignored — per-track profiles contain track names |
+| Paths in output | Relative file names only (`track.flac`), never local absolute paths |
+| Samples in this repo | Track names anonymised (`track-01.flac`) |
+
 ---
 
 ## Design decisions
@@ -110,7 +138,7 @@ An encoded audio payload is easily 4 MB+. `curl -N --data-binary @file` behaves 
 Many FLAC files embed cover art that is actually WebP but labelled PNG. ffmpeg aborts on those. Skipping the video stream sidesteps it entirely.
 
 **Why disable the thinking chain?**
-`enable_thinking: false` and `thinking: {"type": "disabled"}` are both sent, because vendors disagree on which one they honour. Measured saving: ~35% of output tokens.
+`enable_thinking: false` and `thinking: {"type": "disabled"}` are both sent, because vendors disagree on which one they honour. **No controlled experiment was run**, so no token saving is claimed.
 
 **Why medians in the aggregate?**
 Musical feature distributions have long tails; one experimental track drags a mean away. Medians don't move.
@@ -122,12 +150,15 @@ Autocorrelation suffers octave ambiguity — 175 BPM and 87.5 BPM produce peaks 
 
 ## Requirements
 
-| Kind | Dependency | Needed |
-|---|---|---|
-| System | `ffmpeg` | ✅ transcode + local decode |
-| System | `curl` | ✅ API calls |
-| Python | `numpy >= 1.24` | ✅ acoustic analysis |
-| Python | `pyyaml >= 6.0` | ✅ config |
+| Kind | Dependency | Version | Needed |
+|---|---|---|---|
+| System | `ffmpeg` | 6.1.1 tested (≥ 4.x expected to work) | ✅ transcode + local decode |
+| System | `curl` | any recent | ✅ API calls |
+| Python | `numpy` | `==1.26.4` (pinned) | ✅ acoustic analysis |
+| Python | `PyYAML` | `==6.0.1` (pinned) | ✅ config |
+| Python | interpreter | ≥ 3.10, **tested on 3.12.3 only** | ✅ |
+
+PyPI slow where you are? `pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple`
 
 **No** `requests`, `librosa`, `torch`, or `soundfile`. The acoustic path works directly on raw PCM piped out of `ffmpeg`.
 
@@ -137,7 +168,12 @@ Autocorrelation suffers octave ambiguity — 175 BPM and 87.5 BPM produce peaks 
 
 This describes **what is in your library** — it is not a recommender and does not predict what you should listen to.
 
-Validated on a 347-track, 12.9 GB Hi-Res library (~20.6 hours), consuming ~935k tokens.
+Measured on 2026-09-23 (author's local library, recursive; the path itself is not recorded here): **353 audio files** (349 FLAC + 3 MP3 + 1 WAV,
+4 of them in a `_待替换/` subdirectory), **12.89 GiB**, **21.26 hours** of audio.
+Earlier revisions claimed "347 tracks / 12.9 GB / 20.6 hours", which does not match the measurement —
+see README.md for the exact commands to recompute.
+
+Token usage: **estimate only** (~900k), with no artifact in this repo to verify it.
 
 ---
 
