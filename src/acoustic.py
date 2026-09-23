@@ -98,7 +98,9 @@ def features(x, frames, sample_rate):
         return float(spec[:, sel].sum() / spec.sum())
     out["bass_ratio"] = round(band(20, 250), 4)
     out["mid_ratio"] = round(band(250, 2000), 4)
-    out["high_ratio"] = round(band(2000, 11025), 4)
+    # 高频段上界用奈奎斯特频率（sample_rate/2），不是写死的 11025。
+    # 11025 只在 22050 Hz 采样率下才等于奈奎斯特；换成 44100 Hz 会让三频段占比加起来不足 1。
+    out["high_ratio"] = round(band(2000, sample_rate / 2), 4)
     # 频谱平坦度：噪声性 vs 音调性
     gmean = np.exp(np.mean(np.log(spec), axis=1))
     out["flatness"] = round(float((gmean / (spec.mean(axis=1) + 1e-12)).mean()), 4)
