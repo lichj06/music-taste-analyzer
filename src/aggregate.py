@@ -36,7 +36,9 @@ INSTR = ["钢琴", "电吉他", "木吉他", "贝斯", "鼓", "合成器", "弦�
 MOOD = ["明亮", "忧郁", "黑暗", "温暖", "激烈", "宁静", "欢快", "悲伤", "紧张", "舒缓",
         "怀旧", "梦幻", "压迫", "宏大", "轻盈", "躁动", "温柔", "冷峻", "空灵", "热烈",
         "孤独", "焦虑", "希望", "绝望", "俏皮", "神圣", "荒诞", "克制", "宣泄"]
-SECTIONS_RE = re.compile(r"\n\s*(?:#{1,6}\s*)?\*{0,2}([1-5])\s*[).）]\s*")
+# 行首（或文本开头）的「1.」「1)」「### 1.」「**1.**」都当作小节标题。
+# 原实现要求标题前必须有 \n，导致描述直接以 "### 1. 风格" 开头时第 1 节整段丢失。
+SECTIONS_RE = re.compile(r"(?:^|\n)\s*(?:#{1,6}\s*)?\*{0,2}([1-5])\s*[).）]\s*", re.M)
 
 
 def sections(text):
@@ -89,10 +91,14 @@ def build(rows, langs):
     lines = ["# 曲库审美分析报告", "",
              f"> 样本：**{n}** 首 · 由 music-taste-analyzer 自动生成", "", "---", ""]
 
-    def table(title, counter, total=n):
+    def table(title, counter, total=n, note=None):
         lines.extend([f"## {title}", "", "| 项 | 曲目 | 占比 |", "|---|---:|---:|"])
         for k, v in counter.most_common():
-            lines.append(f"| {k} | {v} | {v*100//max(total,1)}% |")
+            # 取一位小数：原来用整除（//）会把 33.3% 显示成 33%，加上多标签重复计数，
+            # 合计既不等于 100%、也看不出误差来自哪里
+            lines.append(f"| {k} | {v} | {v * 100 / max(total, 1):.1f}% |")
+        if note:
+            lines.extend(["", f"> {note}"])
         lines.append("")
 
     gc, ic, mc = Counter(), Counter(), Counter()
@@ -108,11 +114,24 @@ def build(rows, langs):
             keys[f"{acc['key']} {acc['mode']}"] += 1
             modes[acc["mode"]] += 1
 
-    table("一、曲风构成", gc)
-    table("二、编制偏好（音色）", ic)
-    table("三、情绪图谱", mc)
+    ML_NOTE = "多标签统计：一首歌可命中多个标签，占比合计会超过 100%，这是设计如此，不是算错。"
+    table("一、曲风构成", gc, note=ML_NOTE)
+    table("二、编制偏好（音色）", ic, note=ML_NOTE)
+    table("三、情绪图谱", mc, note=ML_NOTE)
     if langs:
-        table("四、语言分布（依据歌词文件）", Counter(langs.values()), len(langs))
+        # 只统计本次样本里的曲目。lyrics.scan 扫的是整个 music_dir，
+        # 直接用它当分母会让 `--limit 1` 的报告里仍然列出全库的语言分布。
+        titles = {r["title"] for r in rows}
+        sample_langs = {k: v for k, v in langs.items()
+                        if k in titles or k.replace("/", "_").replace("\\", "_") in titles}
+        if sample_langs:
+            table("四、语言分布（依据歌词文件）", Counter(sample_langs.values()),
+                  len(sample_langs),
+                  note=f"分母是样本中**有歌词文件**的曲目数（{len(sample_langs)} / {n} 首）。")
+        else:
+            lines += ["## 四、语言分布（依据歌词文件）", "",
+                      f"> 全库有 {len(langs)} 条歌词判定，但与本次样本的 {n} 首曲目名对不上"
+                      "（样本被改名，或样本里的曲目都没有 .lrc）。", ""]
     if modes:
         table("五、大小调", modes, sum(modes.values()))
         table("六、调性分布", keys, sum(keys.values()))
