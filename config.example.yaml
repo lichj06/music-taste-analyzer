@@ -9,13 +9,14 @@ model:
   name: qwen3.8-omni-flash
   api_key_env: DASHSCOPE_API_KEY
   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  disable_thinking: true              # 关闭思考链，省 ~35% token
+  disable_thinking: true              # 关闭思考链（是否省 token 未做对照实验）
   max_tokens: 1600
 
 # 批量处理
 batch:
   workers: 5                          # 并发数（I/O 密集，5 左右合适）
   bitrate: 128k                       # 转码码率（base64 需 < 10MB）
+  transcode_seconds: 60               # 只把前 N 秒上传给第三方 API（隐私/版权最小化）
   skip_existing: true                 # 断点续跑
 
 # 本地声学分析

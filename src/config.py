@@ -14,7 +14,8 @@ DEFAULTS = {
         "disable_thinking": True,
         "max_tokens": 1600,
     },
-    "batch": {"workers": 5, "bitrate": "128k", "skip_existing": True},
+    "batch": {"workers": 5, "bitrate": "128k", "skip_existing": True,
+              "transcode_seconds": 60},
     "local": {"sample_rate": 22050, "max_seconds": 90},
 }
 
